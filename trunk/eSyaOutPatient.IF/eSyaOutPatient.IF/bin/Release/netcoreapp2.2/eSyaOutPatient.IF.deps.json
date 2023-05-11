@@ -1,0 +1,36 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v2.2",
+    "signature": "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v2.2": {
+      "eSyaOutPatient.IF/1.0.0": {
+        "dependencies": {
+          "eSyaOutPatient.DO": "1.0.0"
+        },
+        "runtime": {
+          "eSyaOutPatient.IF.dll": {}
+        }
+      },
+      "eSyaOutPatient.DO/1.0.0": {
+        "runtime": {
+          "eSyaOutPatient.DO.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "eSyaOutPatient.IF/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "eSyaOutPatient.DO/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

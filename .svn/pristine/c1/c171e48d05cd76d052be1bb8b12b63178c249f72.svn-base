@@ -1,0 +1,40 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using eSyaOutPatient.DO;
+using eSyaOutPatient.IF;
+using Microsoft.AspNetCore.Mvc;
+
+namespace eSyaOutPatient.WebAPI.Controllers
+{
+    [Route("api/[controller]/[action]")]
+    [ApiController]
+    public class PatientRegistrationController : ControllerBase
+    {
+        private readonly IPatientRegistrationRepository _patientRegistrationRepository;
+
+        public PatientRegistrationController(IPatientRegistrationRepository patientRegistrationRepository)
+        {
+            _patientRegistrationRepository = patientRegistrationRepository;
+        }
+
+
+
+
+        [HttpGet]
+        public async Task<IActionResult> GetAppointmentDetailByDate(int businessKey, DateTime startDate, DateTime endDate, string vType, string status)
+        {
+            var ds = await _patientRegistrationRepository.GetAppointmentDetailByDate(businessKey, startDate, endDate,vType, status);
+            return Ok(ds);
+        }
+        [HttpGet]
+        public async Task<IActionResult> GetPatientByAppointmentKey(int businessKey, decimal appKey)
+        {
+            var ds = await _patientRegistrationRepository.GetPatientByAppointmentKey(businessKey, appKey);
+            return Ok(ds);
+        }
+
+
+    }
+}

@@ -1,0 +1,21 @@
+﻿using eSyaOutPatient.DO;
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace eSyaOutPatient.IF
+{
+    public interface IPreOperativeRepository
+    {
+        Task<DO_ReturnParameter> InsertIntoPreOperativeInformation(DO_PreOperativeInformation obj);
+        Task<DO_ReturnParameter> InsertPatientClinicalInformation(DO_PreOperativeInformation obj);
+        Task<List<DO_PreOperativeInformation>> GetPreOperativeInformation(int businessKey, int UHID, int vNumber, string clType);
+        Task<List<DO_PreOperativeInformation>> GetInformationValueView(int businessKey, int UHID, int vNumber, string clType);
+        Task<List<DO_PreOperativeInformation>> GetClinicalInformationValueByTransaction(int businessKey, int UHID, int vNumber, int transactionID);
+        Task<DO_ReturnParameter> UpdatePatientClinicalInformation(DO_PreOperativeInformation obj);
+        Task<DO_ReturnParameter> DeletePatientClinicalInformation(DO_PreOperativeInformation obj);
+        Task<List<DO_PreOperativeInformation>> GetFormDetailByType(int businessKey, int UHID, string fType);
+
+    }
+}

@@ -1,0 +1,9 @@
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\bin\Release\netcoreapp2.2\eSyaOutPatient.DO.deps.json
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\bin\Release\netcoreapp2.2\eSyaOutPatient.DO.dll
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\bin\Release\netcoreapp2.2\eSyaOutPatient.DO.pdb
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\obj\Release\netcoreapp2.2\eSyaOutPatient.DO.csprojAssemblyReference.cache
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\obj\Release\netcoreapp2.2\eSyaOutPatient.DO.csproj.CoreCompileInputs.cache
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\obj\Release\netcoreapp2.2\eSyaOutPatient.DO.AssemblyInfoInputs.cache
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\obj\Release\netcoreapp2.2\eSyaOutPatient.DO.AssemblyInfo.cs
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\obj\Release\netcoreapp2.2\eSyaOutPatient.DO.dll
+D:\eSya Project\Solution\Project_eSyaWebAPI\eSyaOutPatient.WebAPI\trunk\eSyaOutPatient.DO\eSyaOutPatient.DO\obj\Release\netcoreapp2.2\eSyaOutPatient.DO.pdb

@@ -1,0 +1,80 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using eSyaOutPatient.IF;
+using eSyaOutPatient.DO;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+
+namespace eSyaOutPatient.WebAPI.Controllers
+{
+    [Route("api/[controller]/[action]")]
+    [ApiController]
+    public class PreOperativeController : ControllerBase
+    {
+        private readonly IPreOperativeRepository _preOperativeRepository;
+
+        public PreOperativeController(IPreOperativeRepository preoperativeRepository)
+        {
+            _preOperativeRepository = preoperativeRepository;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> InsertIntoPreOperativeInformation(DO_PreOperativeInformation obj)
+        {
+            var ds = await _preOperativeRepository.InsertIntoPreOperativeInformation(obj);
+            return Ok(ds);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> InsertPatientClinicalInformation(DO_PreOperativeInformation obj)
+        {
+            var ds = await _preOperativeRepository.InsertPatientClinicalInformation(obj);
+            return Ok(ds);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetPreOperativeInformation(int businessKey, int UHID, int vNumber, string clType)
+        {
+            var ds = await _preOperativeRepository.GetPreOperativeInformation(businessKey, UHID, vNumber, clType);
+            return Ok(ds);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetInformationValueView(int businessKey, int UHID, int vNumber, string clType)
+        {
+            var ds = await _preOperativeRepository.GetInformationValueView(businessKey, UHID, vNumber, clType);
+            return Ok(ds);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetClinicalInformationValueByTransaction(int businessKey, int UHID, int vNumber, int transactionID)
+        {
+            var ds = await _preOperativeRepository.GetClinicalInformationValueByTransaction(businessKey, UHID, vNumber, transactionID);
+            return Ok(ds);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdatePatientClinicalInformation(DO_PreOperativeInformation obj)
+        {
+            var ds = await _preOperativeRepository.UpdatePatientClinicalInformation(obj);
+            return Ok(ds);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> DeletePatientClinicalInformation(DO_PreOperativeInformation obj)
+        {
+            var ds = await _preOperativeRepository.DeletePatientClinicalInformation(obj);
+            return Ok(ds);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetFormDetailByType(int businessKey, int UHID, string fType)
+        {
+            var ds = await _preOperativeRepository.GetFormDetailByType(businessKey, UHID, fType);
+            return Ok(ds);
+        }
+
+    }
+}

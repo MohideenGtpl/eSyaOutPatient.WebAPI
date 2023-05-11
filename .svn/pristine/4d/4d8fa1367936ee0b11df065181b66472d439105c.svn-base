@@ -1,0 +1,87 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using eSyaOutPatient.DO;
+using eSyaOutPatient.IF;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+
+namespace eSyaOutPatient.WebAPI.Controllers
+{
+    [Route("api/[controller]/[action]")]
+    [ApiController]
+    public class OPRegistrationController : ControllerBase
+    {
+        private readonly IOPRegistrationRepository _opRegistrationRepository;
+        private readonly IAppointmentBookingRepository _appointmentBookingRepository;
+
+        public OPRegistrationController(IAppointmentBookingRepository appointmentBookingRepository,IOPRegistrationRepository opRegistrationRepository)
+        {
+            _appointmentBookingRepository = appointmentBookingRepository;
+            _opRegistrationRepository = opRegistrationRepository;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> InsertInToPatientOPRegistration(DO_OPVisit obj)
+        {
+            var ds = await _appointmentBookingRepository.GetPatientAppointmentDetailByAppkey(obj.BusinessKey, obj.AppointmentKey);
+
+            if(ds == null)
+            {
+                return Ok(new DO_ReturnParameter { Status = false, Message = "Invalid Appointment key" });
+            }
+            if (ds.AppointmentDate.Date > System.DateTime.Now.Date)
+            {
+                return Ok(new DO_ReturnParameter { Status = false, Message = "Upcoming Appointment cannot be registered" });
+            }
+            if (ds.AppointmentStatus == "CN")
+            {
+                return Ok(new DO_ReturnParameter { Status = false, Message = "Appointment has been cancelled" });
+            }
+            if (ds.AppointmentStatus == "RG")
+            {
+                return Ok(new DO_ReturnParameter { Status = false, Message = "Appointment has been already registered" });
+            }
+
+            obj.AppointmentKey = ds.AppointmentKey;
+            obj.HospitalNumber = ds.UHID??0;
+            obj.VisitDate = ds.AppointmentDate;
+            obj.IsNewRegn = (ds.UHID ?? 0) == 0;
+            obj.VisitType = ds.VisitType;
+            obj.RegistrationType = "C";
+            obj.IsVIP = true;
+            obj.IsMLC = true;
+            obj.PatientProfile = new DO_PatientProfile
+            {
+                HospitalNumber = ds.UHID ?? 0,
+                RegistrationDate = System.DateTime.Now,
+                BusinessKey = ds.BusinessKey,
+                Nationality = 0,
+                FirstName = ds.PatientFirstName,
+                LastName = ds.PatientLastName,
+                ISDCode = 0,
+                MobileNumber = ds.PatientMobileNumber,
+                Gender = ds.Gender,
+                DateOfBirth = ds.DateOfBirth,
+                AgeYY = 0,
+                AgeMM = 0,
+                AgeDD = 0,
+                eMailID = ds.PatientEmailID,
+                IsDOBApplicable = true,
+                PatientStatus = "Y",
+                RecordStatus = 0
+            };
+
+            obj.ConsultationInfo = new DO_ConsultationInfo
+            {
+                SpecialtyID = ds.SpecialtyID,
+                DoctorID = ds.DoctorID,
+                Episode = (ds.UHID ?? 0) == 0 ? "N" : "F"
+            };
+
+            var rg = await _opRegistrationRepository.InsertInToPatientOPRegistration(obj);
+            return Ok(rg);
+        }
+    }
+}

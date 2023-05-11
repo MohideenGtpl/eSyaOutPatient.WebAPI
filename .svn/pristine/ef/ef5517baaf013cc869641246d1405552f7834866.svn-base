@@ -1,0 +1,234 @@
+﻿using eSyaOutPatient.DL.Entities;
+using eSyaOutPatient.DO;
+using eSyaOutPatient.IF;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace eSyaOutPatient.DL.Repository
+{
+    public class OPRegistrationRepository : IOPRegistrationRepository
+    {
+        public async Task<DO_ReturnParameter> InsertInToPatientOPRegistration(DO_OPVisit obj)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                using (var dbContext = db.Database.BeginTransaction())
+                {
+                    try
+                    {
+                        bool warning = false;
+                        string warningMessage = "";
+
+                        var financialYear = db.GtEcclco.Where(w =>
+                                                         System.DateTime.Now.Date >= w.FromDate.Date
+                                                      && System.DateTime.Now.Date <= w.TillDate.Date)
+                                          .First().FinancialYear;
+
+                        GtEfoppp pp;
+                        if (obj.IsNewRegn)
+                        {
+                            pp = new GtEfoppp
+                            {
+                                HospitalNumber = 1,
+                                RegistrationDate = System.DateTime.Now,
+                                BusinessKey = obj.BusinessKey,
+                                Nationality = obj.PatientProfile.Nationality,
+                                NationalId = obj.PatientProfile.NationalID,
+                                Title = obj.PatientProfile.Title,
+                                FirstName = obj.PatientProfile.FirstName,
+                                MiddleName = obj.PatientProfile.MiddleName,
+                                LastName = obj.PatientProfile.LastName,
+                                Gender = obj.PatientProfile.Gender,
+                                IsDobapplicable = obj.PatientProfile.IsDOBApplicable,
+                                DateOfBirth = obj.PatientProfile.DateOfBirth,
+                                AgeYy = obj.PatientProfile.AgeYY,
+                                AgeMm = obj.PatientProfile.AgeMM,
+                                AgeDd = obj.PatientProfile.AgeDD,
+                                BloodGroup = obj.PatientProfile.BloodGroup,
+                                Isdcode = obj.PatientProfile.ISDCode,
+                                MobileNumber = obj.PatientProfile.MobileNumber,
+                                EMailId = obj.PatientProfile.eMailID,
+                                PatientStatus = obj.PatientProfile.PatientStatus,
+                                RecordStatus = obj.PatientProfile.RecordStatus,
+                                BillStatus = "O",
+                                PatientId = obj.PatientProfile.PatientID,
+                                ActiveStatus = true,
+                                CreatedBy = obj.UserID,
+                                CreatedOn = System.DateTime.Now,
+                                CreatedTerminal = obj.TerminalID
+                            };
+
+                            db.GtEfoppp.Add(pp);
+                        }
+                        else
+                        {
+                            pp = await db.GtEfoppp.Where(w => w.HospitalNumber == obj.HospitalNumber).FirstAsync();
+
+                            pp.Nationality = obj.PatientProfile.Nationality;
+                            pp.NationalId = obj.PatientProfile.NationalID;
+                            pp.Title = obj.PatientProfile.Title;
+                            pp.FirstName = obj.PatientProfile.FirstName;
+                            pp.MiddleName = obj.PatientProfile.MiddleName;
+                            pp.LastName = obj.PatientProfile.LastName;
+                            pp.Gender = obj.PatientProfile.Gender;
+                            pp.IsDobapplicable = obj.PatientProfile.IsDOBApplicable;
+                            pp.DateOfBirth = obj.PatientProfile.DateOfBirth;
+                            pp.AgeYy = obj.PatientProfile.AgeYY;
+                            pp.AgeMm = obj.PatientProfile.AgeMM;
+                            pp.AgeDd = obj.PatientProfile.AgeDD;
+                            pp.BloodGroup = obj.PatientProfile.BloodGroup;
+                            pp.Isdcode = obj.PatientProfile.ISDCode;
+                            pp.MobileNumber = obj.PatientProfile.MobileNumber;
+                            pp.EMailId = obj.PatientProfile.eMailID;
+                            pp.ModifiedBy = obj.UserID;
+                            pp.ModifiedOn = System.DateTime.Now;
+                            pp.ModifiedTerminal = obj.TerminalID;
+                        }
+
+                        foreach (var a in obj.PatientProfile.l_PatientAddress)
+                        {
+                            var cd = db.GtEfopcd.Where(w => w.HospitalNumber == pp.HospitalNumber && w.AddressType == a.AddressType).FirstOrDefault();
+                            if (cd == null)
+                            {
+                                cd = new GtEfopcd
+                                {
+                                    HospitalNumber = pp.HospitalNumber,
+                                    AddressType = a.AddressType,
+                                    AddressLine1 = a.AddressLine1,
+                                    AddressLine2 = a.AddressLine2,
+                                    AddressLine3 = a.AddressLine3,
+                                    ActiveStatus = true,
+                                    CreatedBy = obj.UserID,
+                                    CreatedOn = System.DateTime.Now,
+                                    CreatedTerminal = obj.TerminalID
+                                };
+                                db.GtEfopcd.Add(cd);
+                            }
+                            else
+                            {
+                                cd.AddressLine1 = a.AddressLine1;
+                                cd.AddressLine2 = a.AddressLine2;
+                                cd.AddressLine3 = a.AddressLine3;
+                                cd.ModifiedBy = obj.UserID;
+                                cd.ModifiedOn = System.DateTime.Now;
+                                cd.ModifiedTerminal = obj.TerminalID;
+                            }
+                        }
+
+                        int visitSerialNo = 1;
+                        if (!obj.IsNewRegn)
+                            visitSerialNo = db.GtEfopvd.Where(w => w.HospitalNumber == pp.HospitalNumber).Select(s => s.SerialNumber).DefaultIfEmpty(0).Max() + 1;
+
+                        GtEfopvd vd = new GtEfopvd
+                        {
+                            HospitalNumber = pp.HospitalNumber,
+                            VisitDate = System.DateTime.Now,
+                            SerialNumber = visitSerialNo,
+                            BusinessKey = obj.BusinessKey,
+                            RegistrationType = obj.RegistrationType,
+                            PatientClass = obj.PatientClass,
+                            VisitType = obj.VisitType,
+                            VisitClass = obj.VisitClass,
+                            VisitCategory = obj.VisitCategory,
+                            Vdkey = obj.VDKey,
+                            PatientType = obj.PatientType,
+                            PatientCategory = obj.PatientCategory,
+                            RatePlan = obj.RatePlan,
+                            AppointmentKey = obj.AppointmentKey,
+                            IsVip = obj.IsVIP,
+                            IsMlc = obj.IsMLC,
+                            IsRecommendedByStaff = obj.IsRecommendedByStaff,
+                            RecommenderName = obj.RecommenderName,
+                            IsStaff = obj.IsStaff,
+                            IsStaffDependent = obj.IsStaffDependent,
+                            IsStudent = obj.IsStudent,
+                            SourceOfReference = obj.SourceOfReference,
+                            SubSor = obj.SubSOR,
+                            BillStatus = obj.BillStatus,
+                            ActiveStatus = true,
+                            CreatedBy = obj.UserID,
+                            CreatedOn = System.DateTime.Now,
+                            CreatedTerminal = obj.TerminalID
+                        };
+                        db.GtEfopvd.Add(vd);
+
+                        if (obj.PatientPassport != null)
+                        {
+                            GtEfoppd pd = new GtEfoppd
+                            {
+                                HospitalNumber = pp.HospitalNumber,
+                                Vdkey = obj.VDKey,
+                                IsPpscanned = obj.PatientPassport.IsPPScanned,
+                                PassportNumber = obj.PatientPassport.PassportNumber,
+                                DateOfIssue = obj.PatientPassport.DateOfIssue,
+                                PlaceOfIssue = obj.PatientPassport.PlaceOfIssue,
+                                PassportExpiresOn = obj.PatientPassport.PassportExpiresOn,
+                                VisaType = obj.PatientPassport.VisaType,
+                                VisaIssueDate = obj.PatientPassport.VisaIssueDate,
+                                VisaExpiryDate = obj.PatientPassport.VisaExpiryDate,
+                                ActiveStatus = true,
+                                CreatedBy = obj.UserID,
+                                CreatedOn = System.DateTime.Now,
+                                CreatedTerminal = obj.TerminalID
+                            };
+                            db.GtEfoppd.Add(pd);
+                        }
+
+                        if (obj.PatientNextToKIN != null)
+                        {
+                            GtEfopnk nk = new GtEfopnk
+                            {
+                                HospitalNumber = pp.HospitalNumber,
+                                Vdkey = obj.VDKey,
+                                Kinname = obj.PatientNextToKIN.KINName,
+                                Kinrelationship = obj.PatientNextToKIN.KINRelationship,
+                                Isdcode = obj.PatientNextToKIN.ISDCode,
+                                KinmobileNumber = obj.PatientNextToKIN.KINMobileNumber,
+                                KincontactAddress = obj.PatientNextToKIN.KINContactAddress,
+                                ActiveStatus = true,
+                                CreatedBy = obj.UserID,
+                                CreatedOn = System.DateTime.Now,
+                                CreatedTerminal = obj.TerminalID
+                            };
+                            db.GtEfopnk.Add(nk);
+                        }
+
+                        foreach (var p in obj.l_OPPayer)
+                        {
+                            GtEfoppi pi = new GtEfoppi
+                            {
+                                HospitalNumber = pp.HospitalNumber,
+                                Vdkey = obj.VDKey,
+                                SerialNumber = obj.SerialNumber,
+                                Payer = p.Payer,
+                                IsPrimaryPayer = p.IsPrimaryPayer,
+                                RatePlan = p.RatePlan,
+                                SchemePlan = p.SchemePlan,
+                                MemberId = p.MemberID,
+                                CoPayPerc = p.CoPayPerc,
+                                ActiveStatus = true,
+                                CreatedBy = obj.UserID,
+                                CreatedOn = System.DateTime.Now,
+                                CreatedTerminal = obj.TerminalID
+                            };
+                            db.GtEfoppi.Add(pi);
+                        }
+
+                        await db.SaveChangesAsync();
+                        dbContext.Commit();
+                        return new DO_ReturnParameter { Warning = warning, WarningMessage = warningMessage, Status = true };
+                    }
+                    catch (Exception ex)
+                    {
+                        throw ex;
+                    }
+                }
+            }
+        }
+
+    }
+}

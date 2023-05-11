@@ -1,0 +1,752 @@
+﻿using eSyaOutPatient.DL.Entities;
+using eSyaOutPatient.DO;
+using eSyaOutPatient.IF;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace eSyaOutPatient.DL.Repository
+{
+    public class AppointmentBookingRepository : IAppointmentBookingRepository
+    {
+
+        public async Task<DO_ReturnParameter> InsertIntoDoctorSlotBooking(DO_PatientAppointmentDetail obj)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                try
+                {
+                    bool warning = false;
+                    string warningMessage = "";
+
+                    var wk = obj.AppointmentDate.Date.DayOfWeek.ToString();
+                    var wk_No = CommonMethod.GetWeekOfMonth(obj.AppointmentDate.Date);
+                    var dc = await db.GtEsdos1.Where(w => w.BusinessKey == obj.BusinessKey
+                                && w.DoctorId == obj.DoctorID
+                                && w.DayOfWeek.ToUpper() == wk.ToUpper()
+                                && ((wk_No == 1 && w.Week1) || (wk_No == 2 && w.Week2)
+                                    || (wk_No == 3 && w.Week3) || (wk_No == 4 && w.Week4)
+                                    || (wk_No == 5 && w.Week5) || (wk_No == 6 && w.Week5))
+                                && (bool)w.ActiveStatus).FirstOrDefaultAsync();
+
+                    if (dc != null && dc.NoOfPatients > 0)
+                    {
+                        var patientBooked = await db.GtEopaph.Where(w => w.BusinessKey == obj.BusinessKey
+                               && w.DoctorId == obj.DoctorID
+                               && w.AppointmentDate.Date == obj.AppointmentDate.Date
+                               && !w.UnScheduleWorkOrder
+                               && w.AppointmentStatus != "CN").CountAsync();
+
+                        if (patientBooked >= dc.NoOfPatients)
+                        {
+                            warning = true;
+                            warningMessage = "Patient Limit for the day is " + dc.NoOfPatients.ToString() + ".Already booked patient count is " + patientBooked;
+                        }
+                    }
+
+                    var endTimeSlot = obj.AppointmentFromTime.Add(new TimeSpan(0, obj.Duration, 0));
+
+                    var is_TimeSlotExits = await db.GtEopaph.Where(w => w.BusinessKey == obj.BusinessKey
+                                && w.DoctorId == obj.DoctorID
+                                && w.AppointmentDate.Date == obj.AppointmentDate.Date
+                                && w.AppointmentFromTime >= obj.AppointmentFromTime
+                                && w.AppointmentFromTime < endTimeSlot
+                                && !w.UnScheduleWorkOrder
+                                && w.AppointmentStatus != "CN").CountAsync();
+                    if (is_TimeSlotExits > 0)
+                    {
+                        return new DO_ReturnParameter() { Warning = warning, WarningMessage = warningMessage, Status = false, Message = "The Slot has been already booked" };
+                    }
+
+                    var slotBlocked = await db.GtEopaps.Where(w => w.BusinessKey == obj.BusinessKey
+                               && w.DoctorId == obj.DoctorID
+                               && w.AppointmentDate.Date == obj.AppointmentDate.Date
+                               && w.AppointmentFromTime >= obj.AppointmentFromTime
+                               && w.AppointmentFromTime < endTimeSlot
+                               && w.AppointmentStatus == "SL"
+                               && w.CreatedBy != obj.UserID
+                               && w.CreatedOn.AddMinutes(2) > System.DateTime.Now).CountAsync();
+                    if (slotBlocked > 0)
+                    {
+                        return new DO_ReturnParameter() { Warning = warning, WarningMessage = warningMessage, Status = false, Message = "The Slot has been blocked." };
+                    }
+
+                    var qs_apSL = new GtEopaps
+                    {
+                        BusinessKey = obj.BusinessKey,
+                        SpecialtyId = obj.SpecialtyID,
+                        DoctorId = obj.DoctorID,
+                        AppointmentDate = obj.AppointmentDate,
+                        AppointmentFromTime = obj.AppointmentFromTime,
+                        Duration = obj.Duration,
+                        AppointmentStatus = "SL",
+                        ActiveStatus = true,
+                        FormId = obj.FormID,
+                        CreatedBy = obj.UserID,
+                        CreatedOn = System.DateTime.Now,
+                        CreatedTerminal = obj.TerminalID
+                    };
+                    db.GtEopaps.Add(qs_apSL);
+                    await db.SaveChangesAsync();
+
+                    return new DO_ReturnParameter { Warning = warning, WarningMessage = warningMessage, Status = true };
+                }
+                catch (Exception ex)
+                {
+                    throw ex;
+                }
+            }
+        }
+
+
+        public async Task<DO_ReturnParameter> InsertIntoPatientAppointmentDetail(DO_PatientAppointmentDetail obj)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                using (var dbContext = db.Database.BeginTransaction())
+                {
+                    try
+                    {
+                        var endTimeSlot = obj.AppointmentFromTime.Add(new TimeSpan(0, obj.Duration, 0));
+
+                        var is_TimeSlotExits = await db.GtEopaph.Where(w => w.BusinessKey == obj.BusinessKey
+                                    && w.DoctorId == obj.DoctorID
+                                    && w.AppointmentDate.Date == obj.AppointmentDate.Date
+                                    && w.AppointmentFromTime >= obj.AppointmentFromTime
+                                    && w.AppointmentFromTime < endTimeSlot
+                                    && !w.UnScheduleWorkOrder
+                                    && w.AppointmentStatus != "CN").CountAsync();
+                        if (is_TimeSlotExits > 0)
+                        {
+                            return new DO_ReturnParameter() { Status = false, Message = "The Slot has been already booked" };
+                        }
+
+                        if (obj.UHID > 0)
+                        {
+                            var isAlreadyBooked = await db.GtEopaph
+                                .Join(db.GtEopapd,
+                                    h => new { h.BusinessKey, h.AppointmentKey },
+                                    d => new { d.BusinessKey, d.AppointmentKey },
+                                    (h, d) => new { h, d })
+                                .Where(w => w.h.BusinessKey == obj.BusinessKey
+                                        && w.d.Uhid == obj.UHID
+                                        && w.h.DoctorId != obj.DoctorID
+                                        && w.h.AppointmentDate.Date == obj.AppointmentDate.Date
+                                        && w.h.AppointmentFromTime >= obj.AppointmentFromTime
+                                        && w.h.AppointmentFromTime < endTimeSlot
+                                        && !w.h.UnScheduleWorkOrder
+                                        && w.h.AppointmentStatus != "CN"
+                                    ).CountAsync();
+                            if (isAlreadyBooked > 0)
+                            {
+                                return new DO_ReturnParameter() { Status = false, Message = "The Same MRN is booked for different doctor for same time slot." };
+                            }
+                        }
+
+                        var financialYear = db.GtEcclco.Where(w =>
+                                                           System.DateTime.Now.Date >= w.FromDate.Date
+                                                        && System.DateTime.Now.Date <= w.TillDate.Date)
+                                            .First().FinancialYear;
+                        obj.FinancialYear = (int)financialYear;
+
+                        //var dc_ap = await db.GtHmfodc
+                        //                .Where(w => w.BusinessKey == obj.BusinessKey
+                        //                    && w.FinancialYear == financialYear
+                        //                    && w.DocumentId == 11).FirstOrDefaultAsync();
+                        //dc_ap.CurrentDocNumber = dc_ap.CurrentDocNumber + 1;
+                        //await db.SaveChangesAsync();
+                        //obj.DocumentID = dc_ap.DocumentId;
+                        //obj.DocumentNumber = dc_ap.CurrentDocNumber;
+
+                        obj.DocumentID = 1;
+                        obj.DocumentNumber = (int)db.GtEopaph.Where(W => W.BusinessKey == obj.BusinessKey && W.FinancialYear == obj.FinancialYear).Select(m => m.DocumentNumber).DefaultIfEmpty(0).Max() + 1;
+
+                        var appointmentKey = decimal.Parse(obj.FinancialYear.ToString().Substring(2, 2) + obj.BusinessKey.ToString().PadLeft(2, '0') +
+                            obj.DocumentNumber.ToString());
+
+                        obj.AppointmentKey = appointmentKey;
+
+                        string appType = "CA";
+                        if (obj.IsSponsored)
+                            appType = "SA";
+
+                        //var q_sqNo = db.GtQsapqt.Where(w => w.BusinessKey == obj.BusinessKey && w.TokenDate.Date == obj.AppointmentDate.Date)
+                        //  .Select(s => s.SequeueNumber)
+                        //  .DefaultIfEmpty(0).Max();
+                        //q_sqNo = q_sqNo + 1;
+                        //await db.SaveChangesAsync();
+
+                        var rp = await GetAppointmentQueueToken(db, obj);
+                        if (!rp.Status)
+                            return rp;
+                        var qTokenKey = obj.QueueTokenKey;
+
+                        var qs_apTk = new GtEopapq
+                        {
+                            BusinessKey = obj.BusinessKey,
+                            TokenDate = obj.AppointmentDate.Date,
+                            QueueTokenKey = qTokenKey,
+                            AppointmentFromTime = obj.AppointmentFromTime,
+                            AppointmentKey = obj.AppointmentKey,
+                            SequeueNumber = 1,
+                            PatientType = appType,
+                            SpecialtyId = obj.SpecialtyID,
+                            DoctorId = obj.DoctorID,
+                            Uhid = obj.UHID,
+                            TokenStatus = "AP",
+                            ActiveStatus = true,
+                            FormId = obj.FormID,
+                            CreatedBy = obj.UserID,
+                            CreatedOn = System.DateTime.Now,
+                            CreatedTerminal = obj.TerminalID
+                        };
+                        db.GtEopapq.Add(qs_apTk);
+                        await db.SaveChangesAsync();
+
+                        var app_hd = new GtEopaph
+                        {
+                            BusinessKey = obj.BusinessKey,
+                            FinancialYear = obj.FinancialYear,
+                            DocumentId = obj.DocumentID,
+                            DocumentNumber = obj.DocumentNumber,
+                            AppointmentKey = obj.AppointmentKey,
+                            SpecialtyId = obj.SpecialtyID,
+                            DoctorId = obj.DoctorID,
+                            AppointmentDate = obj.AppointmentDate,
+                            AppointmentFromTime = obj.AppointmentFromTime,
+                            Duration = obj.Duration,
+                            AppointmentStatus = "AP",
+                            ReasonforAppointment = obj.ReasonforAppointment,
+                            QueueTokenKey = qTokenKey,
+                            VisitType = obj.VisitType,
+                            ReferredBy = obj.ReferredBy,
+                            UnScheduleWorkOrder = false,
+                            ActiveStatus = true,
+                            FormId = obj.FormID,
+                            CreatedBy = obj.UserID,
+                            CreatedOn = System.DateTime.Now,
+                            CreatedTerminal = obj.TerminalID
+                        };
+                        db.GtEopaph.Add(app_hd);
+                        await db.SaveChangesAsync();
+
+                        var app_dt = new GtEopapd
+                        {
+                            BusinessKey = obj.BusinessKey,
+                            AppointmentKey = obj.AppointmentKey,
+                            Uhid = obj.UHID,
+                            PatientFirstName = obj.PatientFirstName,
+                            PatientMiddleName = obj.PatientMiddleName,
+                            PatientLastName = obj.PatientLastName,
+                            Gender = obj.Gender,
+                            DateOfBirth = obj.DateOfBirth,
+                            MobileNumber = obj.PatientMobileNumber,
+                            EmailId = obj.PatientEmailID,
+                            IsSponsored = obj.IsSponsored,
+                            CustomerId = obj.CustomerID,
+                            ActiveStatus = true,
+                            FormId = obj.FormID,
+                            CreatedBy = obj.UserID,
+                            CreatedOn = System.DateTime.Now,
+                            CreatedTerminal = obj.TerminalID
+                        };
+                        db.GtEopapd.Add(app_dt);
+
+                        await db.SaveChangesAsync();
+                        dbContext.Commit();
+
+                        return new DO_ReturnParameter { Status = true, Key = qTokenKey };
+                    }
+                    catch (DbUpdateException ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                    catch (Exception ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                }
+            }
+        }
+
+        public async Task<DO_ReturnParameter> GetAppointmentQueueToken(eSyaEnterprise db, DO_PatientAppointmentDetail obj)
+        {
+            //var doctorCode = "000";
+            //var dc_Code = db.GtQsdcrm.Where(w => w.BusinessKey == obj.BusinessKey && w.DoctorId == obj.DoctorID).FirstOrDefault();
+            //if (dc_Code != null)
+            //    doctorCode = dc_Code.DoctorCode;
+            //else
+            //    return new DO_ReturnParameter { Status = false, Message = "Doctor Code Not Defined for Token Generation" };
+
+            var doctorCode = obj.DoctorID.ToString();
+
+            string appType = "CA";
+            if (obj.IsSponsored)
+                appType = "SA";
+
+            TimeSpan totalDuration = new TimeSpan();
+            var appointmentSchedule = await new DoctorClinicRepository().GetDoctorScheduleByID(obj.BusinessKey, obj.DoctorID, obj.AppointmentDate);
+            foreach (var s in appointmentSchedule)
+            {
+                if (s.FromTime <= obj.AppointmentFromTime && s.ToTime >= obj.AppointmentFromTime)
+                {
+                    totalDuration += obj.AppointmentFromTime.Subtract(s.FromTime);
+                    break;
+                }
+                else
+                    totalDuration += s.ToTime.Subtract(s.FromTime);
+            }
+
+            var totalIntervalinMinutes = totalDuration.Days * 24 * 60 +
+                                         totalDuration.Hours * 60 +
+                                         totalDuration.Minutes;
+            var slotQueue = Math.Ceiling(totalIntervalinMinutes / 5.0) + 1;
+
+            while (true)
+            {
+                var q_exists = await db.GtEopapq.Where(w => w.BusinessKey == obj.BusinessKey && w.DoctorId == obj.DoctorID
+                    && w.TokenDate.Date == obj.AppointmentDate.Date
+                    && w.QueueTokenKey.Substring(5, w.QueueTokenKey.Length - 5) == slotQueue.ToString().PadLeft(2, '0')).FirstOrDefaultAsync();
+                if (q_exists != null)
+                {
+                    slotQueue++;
+                    continue;
+                }
+                else
+                {
+                    var qTokenKey = appType + doctorCode + slotQueue.ToString().PadLeft(2, '0');
+                    obj.QueueTokenKey = qTokenKey;
+                    break;
+                }
+            }
+
+            return new DO_ReturnParameter
+            {
+                Status = true
+            };
+        }
+
+        public async Task<DO_ReturnParameter> UpdatePatientAppointmentDetail(DO_PatientAppointmentDetail obj)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                using (var dbContext = db.Database.BeginTransaction())
+                {
+                    try
+                    {
+                        obj.AppointmentKey = Math.Round(obj.AppointmentKey);
+                        var app_dt = await db.GtEopapd.Where(w => w.BusinessKey == obj.BusinessKey && w.AppointmentKey == obj.AppointmentKey).FirstOrDefaultAsync();
+
+                        app_dt.PatientFirstName = obj.PatientFirstName;
+                        app_dt.PatientLastName = obj.PatientLastName;
+                        app_dt.Gender = obj.Gender;
+                        app_dt.DateOfBirth = obj.DateOfBirth;
+                        app_dt.MobileNumber = obj.PatientMobileNumber;
+                        app_dt.EmailId = obj.PatientEmailID;
+                        app_dt.IsSponsored = obj.IsSponsored;
+
+                        app_dt.ModifiedBy = obj.UserID;
+                        app_dt.ModifiedOn = System.DateTime.Now;
+                        app_dt.ModifiedTerminal = obj.TerminalID;
+
+                        await db.SaveChangesAsync();
+                        dbContext.Commit();
+
+                        return new DO_ReturnParameter { Status = true, ID = obj.AppointmentKey };
+                    }
+                    catch (DbUpdateException ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                    catch (Exception ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                }
+            }
+        }
+
+        public async Task<DO_ReturnParameter> UpdatePatientAppointmentCancellation(DO_PatientAppointmentDetail obj)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                using (var dbContext = db.Database.BeginTransaction())
+                {
+                    try
+                    {
+                        obj.AppointmentKey = Math.Round(obj.AppointmentKey);
+                        var app_hd = await db.GtEopaph.Where(w => w.BusinessKey == obj.BusinessKey && w.AppointmentKey == obj.AppointmentKey).FirstOrDefaultAsync();
+
+                        app_hd.QueueTokenKey = null;
+                        app_hd.AppointmentStatus = "CN";
+                        app_hd.ReasonforCancellation = obj.ReasonforCancellation;
+
+                        app_hd.ModifiedBy = obj.UserID;
+                        app_hd.ModifiedOn = System.DateTime.Now;
+                        app_hd.ModifiedTerminal = obj.TerminalID;
+
+                        var app_q = await db.GtEopapq.Where(w => w.BusinessKey == obj.BusinessKey && w.AppointmentKey == obj.AppointmentKey).FirstOrDefaultAsync();
+                        if (app_q != null)
+                            db.GtEopapq.Remove(app_q);
+
+                        await db.SaveChangesAsync();
+                        dbContext.Commit();
+
+                        return new DO_ReturnParameter { Status = true, ID = obj.AppointmentKey };
+                    }
+                    catch (DbUpdateException ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                    catch (Exception ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                }
+            }
+        }
+
+        public async Task<DO_ReturnParameter> UpdatePatientAppointmentReschedule(DO_PatientAppointmentDetail obj)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                using (var dbContext = db.Database.BeginTransaction())
+                {
+                    try
+                    {
+                        obj.AppointmentKey = Math.Round(obj.AppointmentKey);
+                        var app_hd = await db.GtEopaph.Where(w => w.BusinessKey == obj.BusinessKey
+                                        && w.AppointmentKey == obj.AppointmentKey).FirstOrDefaultAsync();
+
+                        if (app_hd.AppointmentStatus == "RG")
+                            return new DO_ReturnParameter { Status = false, Message = "Registration is done for this Appointment." };
+
+                        if (app_hd.SpecialtyId != obj.SpecialtyID)
+                            return new DO_ReturnParameter { Status = false, Message = "Rescheduling is available within specialty" };
+
+                        if (app_hd.DoctorId != obj.DoctorID && app_hd.AppointmentDate.Date != obj.AppointmentDate.Date)
+                            return new DO_ReturnParameter { Status = false, Message = "Doctor change is available for same day only" };
+
+                        var app_dt = await db.GtEopapd.Where(w => w.BusinessKey == obj.BusinessKey
+                                    && w.AppointmentKey == obj.AppointmentKey).FirstOrDefaultAsync();
+
+                        app_hd.QueueTokenKey = null;
+                        var app_q = await db.GtEopapq.Where(w => w.BusinessKey == obj.BusinessKey && w.AppointmentKey == obj.AppointmentKey).FirstOrDefaultAsync();
+                        if (app_q != null)
+                            db.GtEopapq.Remove(app_q);
+
+                        string appType = "CA";
+                        if (app_dt.IsSponsored)
+                            appType = "SA";
+
+                        //var qSqNo = db.GtEopapq.Where(w => w.BusinessKey == obj.BusinessKey && w.TokenDate.Date == obj.AppointmentDate.Date)
+                        //   .Select(s => s.SequeueNumber)
+                        //   .DefaultIfEmpty(0).Max();
+                        //qSqNo = qSqNo + 1;
+
+                        var rp = await GetAppointmentQueueToken(db, obj);
+                        if (!rp.Status)
+                            return rp;
+                        var qTokenKey = obj.QueueTokenKey;
+
+                        var qs_apTk = new GtEopapq
+                        {
+                            BusinessKey = obj.BusinessKey,
+                            TokenDate = obj.AppointmentDate.Date,
+                            QueueTokenKey = qTokenKey,
+                            AppointmentKey = obj.AppointmentKey,
+                            AppointmentFromTime = obj.AppointmentFromTime,
+                            SequeueNumber = 1,
+                            PatientType = appType,
+                            SpecialtyId = obj.SpecialtyID,
+                            DoctorId = obj.DoctorID,
+                            Uhid = app_dt.Uhid,
+                            TokenStatus = "AP",
+                            ActiveStatus = true,
+                            FormId = obj.FormID,
+                            CreatedBy = obj.UserID,
+                            CreatedOn = System.DateTime.Now,
+                            CreatedTerminal = obj.TerminalID
+                        };
+                        db.GtEopapq.Add(qs_apTk);
+
+                        app_hd.QueueTokenKey = qTokenKey;
+
+                        app_hd.DoctorId = obj.DoctorID;
+                        app_hd.AppointmentDate = obj.AppointmentDate;
+                        app_hd.AppointmentFromTime = obj.AppointmentFromTime;
+
+                        if (obj.Duration > 0)
+                            app_hd.Duration = obj.Duration;
+
+                        app_hd.UnScheduleWorkOrder = false;
+
+                        app_hd.ModifiedBy = obj.UserID;
+                        app_hd.ModifiedOn = System.DateTime.Now;
+                        app_hd.ModifiedTerminal = obj.TerminalID;
+
+                        await db.SaveChangesAsync();
+                        dbContext.Commit();
+
+                        return new DO_ReturnParameter { Status = true, Key = app_hd.QueueTokenKey };
+                    }
+                    catch (DbUpdateException ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                    catch (Exception ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                }
+            }
+        }
+
+        public async Task<DO_ReturnParameter> UpdatePatientAppointmentToUnScheduleWorkOrder(DO_PatientAppointmentDetail obj)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                using (var dbContext = db.Database.BeginTransaction())
+                {
+                    try
+                    {
+                        obj.AppointmentKey = Math.Round(obj.AppointmentKey);
+                        var app_hd = await db.GtEopaph.Where(w => w.BusinessKey == obj.BusinessKey && w.AppointmentKey == obj.AppointmentKey).FirstOrDefaultAsync();
+
+                        if (app_hd.AppointmentStatus == "RG")
+                            return new DO_ReturnParameter { Status = false, Message = "Registration is done for this Appointment." };
+
+                        app_hd.UnScheduleWorkOrder = true;
+                        app_hd.QueueTokenKey = null;
+                        var app_q = await db.GtEopapq.Where(w => w.BusinessKey == obj.BusinessKey && w.AppointmentKey == obj.AppointmentKey).FirstOrDefaultAsync();
+                        if (app_q != null)
+                            db.GtEopapq.Remove(app_q);
+
+                        app_hd.ModifiedBy = obj.UserID;
+                        app_hd.ModifiedOn = System.DateTime.Now;
+                        app_hd.ModifiedTerminal = obj.TerminalID;
+
+                        await db.SaveChangesAsync();
+                        dbContext.Commit();
+
+                        return new DO_ReturnParameter { Status = true, ID = obj.AppointmentKey };
+                    }
+                    catch (DbUpdateException ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                    catch (Exception ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                }
+            }
+        }
+
+        public async Task<DO_ReturnParameter> UpdateDoctorAppointmentToUnScheduleWorkOrder(DO_PatientAppointmentDetail obj)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                using (var dbContext = db.Database.BeginTransaction())
+                {
+                    try
+                    {
+                        var l_app = db.GtEopaph.Where(w => w.BusinessKey == obj.BusinessKey && w.SpecialtyId == obj.SpecialtyID
+                                    && w.DoctorId == obj.DoctorID && w.AppointmentDate.Date == obj.AppointmentDate.Date
+                                    && w.AppointmentStatus == "AP");
+
+                        foreach (var app_hd in l_app)
+                        {
+                            app_hd.UnScheduleWorkOrder = true;
+                            app_hd.QueueTokenKey = null;
+                            app_hd.ModifiedBy = obj.UserID;
+                            app_hd.ModifiedOn = System.DateTime.Now;
+                            app_hd.ModifiedTerminal = obj.TerminalID;
+
+                            var app_q = await db.GtEopapq.Where(w => w.BusinessKey == app_hd.BusinessKey && w.AppointmentKey == app_hd.AppointmentKey).FirstOrDefaultAsync();
+                            if (app_q != null)
+                                db.GtEopapq.Remove(app_q);
+
+                        }
+
+                        await db.SaveChangesAsync();
+                        dbContext.Commit();
+
+                        return new DO_ReturnParameter { Status = true };
+                    }
+                    catch (DbUpdateException ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                    catch (Exception ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                }
+            }
+        }
+
+        public async Task<List<DO_PatientAppointmentDetail>> GetPatientAppointmentByDoctorDate(int businessKey, int specialtyId,
+            int doctorId, DateTime fromDate, DateTime toDate)
+        {
+            try
+            {
+                using (var db = new eSyaEnterprise())
+                {
+                    var ds = await db.GtEopaph
+                     .Join(db.GtEopapd,
+                         h => new { h.BusinessKey, h.AppointmentKey },
+                         d => new { d.BusinessKey, d.AppointmentKey },
+                         (h, d) => new { h, d })
+                        .Where(w =>
+                                    w.h.BusinessKey == businessKey
+                                    && (specialtyId == 0 || w.h.SpecialtyId == specialtyId)
+                                    && (doctorId == 0 || w.h.DoctorId == doctorId)
+                                    && w.h.AppointmentDate.Date >= fromDate.Date
+                                    && w.h.AppointmentDate.Date <= toDate.Date
+                                    && w.h.AppointmentStatus != "CN"
+                                    && !w.h.UnScheduleWorkOrder
+                                    && w.h.ActiveStatus && w.d.ActiveStatus
+                                    )
+                        .AsNoTracking()
+                        .Select(r => new DO_PatientAppointmentDetail
+                        {
+                            AppointmentKey = r.h.AppointmentKey,
+                            AppointmentDate = r.h.AppointmentDate,
+                            AppointmentFromTime = r.h.AppointmentFromTime,
+                            Duration = r.h.Duration,
+                            StartDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime),
+                            EndDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime).AddMinutes(r.h.Duration),
+                            PatientFirstName = r.d.PatientFirstName,
+                            PatientLastName = r.d.PatientLastName,
+                            Gender = r.d.Gender,
+                            DateOfBirth = r.d.DateOfBirth,
+                            PatientMobileNumber = r.d.MobileNumber,
+                            PatientEmailID = r.d.EmailId,
+                            IsSponsored = r.d.IsSponsored,
+                            QueueTokenKey = r.h.QueueTokenKey
+                        }).ToListAsync();
+
+                    return ds;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+
+        public async Task<List<DO_PatientAppointmentDetail>> GetDoctorUnScheduleWorkOrder(int businessKey, int specialtyId,
+                int doctorId, DateTime fromDate)
+        {
+            try
+            {
+                using (var db = new eSyaEnterprise())
+                {
+                    var ds = await db.GtEopaph
+                     .Join(db.GtEopapd,
+                         h => new { h.BusinessKey, h.AppointmentKey },
+                         d => new { d.BusinessKey, d.AppointmentKey },
+                         (h, d) => new { h, d })
+                        .Where(w => w.h.BusinessKey == businessKey && w.h.SpecialtyId == specialtyId
+                                    && w.h.DoctorId == doctorId
+                                    && w.h.AppointmentDate.Date >= fromDate.Date
+                                    && w.h.AppointmentStatus == "AP"
+                                    && w.h.UnScheduleWorkOrder
+                                    && w.h.ActiveStatus && w.d.ActiveStatus)
+                        .AsNoTracking()
+                        .Select(r => new DO_PatientAppointmentDetail
+                        {
+                            AppointmentKey = r.h.AppointmentKey,
+                            AppointmentDate = r.h.AppointmentDate,
+                            AppointmentFromTime = r.h.AppointmentFromTime,
+                            Duration = r.h.Duration,
+                            StartDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime),
+                            EndDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime).AddMinutes(r.h.Duration),
+                            PatientFirstName = r.d.PatientFirstName,
+                            PatientLastName = r.d.PatientLastName,
+                            Gender = r.d.Gender,
+                            DateOfBirth = r.d.DateOfBirth,
+                            PatientMobileNumber = r.d.MobileNumber,
+                            PatientEmailID = r.d.EmailId,
+                            IsSponsored = r.d.IsSponsored,
+                            QueueTokenKey = r.h.QueueTokenKey
+                        }).ToListAsync();
+
+                    return ds;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+
+        public async Task<DO_PatientAppointmentDetail> GetPatientAppointmentDetailByAppkey(int businessKey, decimal appointmentKey)
+        {
+            try
+            {
+                using (var db = new eSyaEnterprise())
+                {
+                    var ds = await db.GtEopaph
+                     .Join(db.GtEopapd,
+                         h => new { h.BusinessKey, h.AppointmentKey },
+                         d => new { d.BusinessKey, d.AppointmentKey },
+                         (h, d) => new { h, d })
+                        .Where(w => w.h.BusinessKey == businessKey
+                                && w.h.AppointmentKey == appointmentKey
+                                && w.h.ActiveStatus && w.d.ActiveStatus)
+                        .AsNoTracking()
+                        .Select(r => new DO_PatientAppointmentDetail
+                        {
+                            AppointmentKey = r.h.AppointmentKey,
+                            AppointmentDate = r.h.AppointmentDate,
+                            AppointmentFromTime = r.h.AppointmentFromTime,
+                            Duration = r.h.Duration,
+                            StartDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime),
+                            EndDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime).AddMinutes(r.h.Duration),
+                            UHID = r.d.Uhid,
+                            PatientFirstName = r.d.PatientFirstName,
+                            PatientLastName = r.d.PatientLastName,
+                            Gender = r.d.Gender,
+                            DateOfBirth = r.d.DateOfBirth,
+                            PatientMobileNumber = r.d.MobileNumber,
+                            PatientEmailID = r.d.EmailId,
+                            IsSponsored = r.d.IsSponsored,
+                            CustomerID = r.d.CustomerId,
+                            QueueTokenKey = r.h.QueueTokenKey,
+                            PatientID = r.d.PatientId,
+                            //VisitType = r.hd.h.VisitType,
+                            ReferredBy = r.h.ReferredBy,
+                            DoctorID = r.h.DoctorId,
+                            ReasonforAppointment = r.h.ReasonforAppointment
+
+                        }).FirstOrDefaultAsync();
+
+                    return ds;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+
+    }
+}

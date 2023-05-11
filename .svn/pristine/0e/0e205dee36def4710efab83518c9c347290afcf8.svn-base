@@ -1,0 +1,190 @@
+﻿using eSyaOutPatient.DL.Entities;
+using eSyaOutPatient.DO;
+using eSyaOutPatient.IF;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace eSyaOutPatient.DL.Repository
+{
+    public class PatientRegistrationRepository : IPatientRegistrationRepository
+    {
+        public async Task<List<DO_PatientAppointmentDetail>> GetAppointmentDetailByDate(int businessKey, DateTime startDate, DateTime endDate,string vType, string status)
+        {
+            try
+            {
+                using (var db = new eSyaEnterprise())
+                {
+                    var ds = await db.GtEopaph
+                      .Join(db.GtEopapd,
+                          h => new { h.BusinessKey, h.AppointmentKey },
+                          d => new { d.BusinessKey, d.AppointmentKey },
+                          (h, d) => new { h, d })
+                         .Where(w =>
+                                     w.h.BusinessKey == businessKey
+                                     && w.h.AppointmentDate.Date >= startDate.Date
+                                     && w.h.AppointmentDate.Date <= endDate.Date
+                                     && (w.h.EpisodeType == vType || vType == "A")
+                                     && (w.h.AppointmentStatus == status || status=="A")
+                                     && !w.h.UnScheduleWorkOrder
+                                     && w.h.ActiveStatus && w.d.ActiveStatus
+                                     )
+                         .AsNoTracking()
+                         .Select(r => new DO_PatientAppointmentDetail
+                         {
+                             AppointmentKey = r.h.AppointmentKey,
+                             UHID=r.d.Uhid,
+                             AppointmentDate = r.h.AppointmentDate,
+                             AppointmentFromTime = r.h.AppointmentFromTime,
+                             Duration = r.h.Duration,
+                             StartDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime),
+                             EndDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime).AddMinutes(r.h.Duration),
+                             PatientName = r.d.PatientFirstName + " " + r.d.PatientMiddleName + " " + r.d.PatientLastName,
+                             PatientFirstName=r.d.PatientFirstName,
+                             PatientLastName = r.d.PatientLastName,
+                             Gender = r.d.Gender,
+                             DateOfBirth = r.d.DateOfBirth,
+                             PatientMobileNumber = r.d.MobileNumber,
+                             PatientEmailID = r.d.EmailId,
+                             EpisodeType=r.h.EpisodeType,
+                             IsSponsored = r.d.IsSponsored,
+                             AppointmentStatus = r.h.AppointmentStatus
+
+                         }).ToListAsync();
+
+                    return ds;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+        public async Task<List<DO_PatientAppointmentDetail>> GetPatientByUHID(int businessKey, int uhid)
+        {
+            try
+            {
+                using (var db = new eSyaEnterprise())
+                {
+                    var ds = await db.GtEfoppr
+                      
+                         .Where(w =>
+                                     w.BusinessKey == businessKey
+                                     && w.RUhid == uhid
+                                     && w.ActiveStatus 
+                                     )
+                         .AsNoTracking()
+                         .Select(r => new DO_PatientAppointmentDetail
+                         {
+                             UHID = Convert.ToInt32(r.RUhid),
+                             PatientName = r.FirstName + " " + r.LastName ,
+                             PatientFirstName = r.FirstName,
+                             PatientLastName = r.LastName,
+                             Gender = r.Gender,
+                             DateOfBirth = r.DateOfBirth,
+                             PatientMobileNumber = r.MobileNumber,
+                             PatientEmailID = r.EMailId,
+                             //Age= Convert.ToInt32((DateTime.Today.Subtract(Convert.ToDateTime(r.DateOfBirth)).TotalDays)/365.25),
+                         }).ToListAsync();
+                    var Age = Convert.ToInt32((DateTime.Today.Subtract(Convert.ToDateTime(ds[0].DateOfBirth)).TotalDays) / 365.25);
+                    ds[0].Age = Age;
+                    return ds;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+        public async Task<List<DO_PatientAppointmentDetail>> GetAppointmentDetailByUHID(int businessKey, int uhid)
+        {
+            try
+            {
+                using (var db = new eSyaEnterprise())
+                {
+                    var ds = await db.GtEopaph
+                      .Join(db.GtEopapd,
+                          h => new { h.BusinessKey, h.AppointmentKey },
+                          d => new { d.BusinessKey, d.AppointmentKey },
+                          (h, d) => new { h, d })
+                         .Where(w =>
+                                     w.h.BusinessKey == businessKey
+                                     && w.d.Uhid == uhid
+                                     && w.h.AppointmentStatus != "AP"
+                                     && w.h.AppointmentStatus != "CN"
+                                     && !w.h.UnScheduleWorkOrder
+                                     && w.h.ActiveStatus && w.d.ActiveStatus
+                                     )
+                         .AsNoTracking()
+                         .Select(r => new DO_PatientAppointmentDetail
+                         {
+                             AppointmentKey = r.h.AppointmentKey,
+                             UHID = r.d.Uhid,
+                             AppointmentDate = r.h.AppointmentDate,
+                             AppointmentFromTime = r.h.AppointmentFromTime,
+                             Duration = r.h.Duration,
+                             StartDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime),
+                             EndDate = r.h.AppointmentDate.Date.Add(r.h.AppointmentFromTime).AddMinutes(r.h.Duration),
+                             PatientName = r.d.PatientFirstName + " " + r.d.PatientMiddleName + " " + r.d.PatientLastName,
+                             PatientFirstName = r.d.PatientFirstName,
+                             PatientLastName = r.d.PatientLastName,
+                             Gender = r.d.Gender,
+                             DateOfBirth = r.d.DateOfBirth,
+                             PatientMobileNumber = r.d.MobileNumber,
+                             PatientEmailID = r.d.EmailId,
+                             EpisodeType = r.h.EpisodeType,
+                             IsSponsored = r.d.IsSponsored,
+                             AppointmentStatus = r.h.AppointmentStatus
+
+                         }).OrderByDescending(o=> o.AppointmentDate).ThenByDescending(o=> o.AppointmentKey).ToListAsync();
+
+                    return ds;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+        public async Task<DO_ReturnParameter> AddDummyVisit(int businessKey)
+        {
+            using (var db = new eSyaEnterprise())
+            {
+                using (var dbContext = db.Database.BeginTransaction())
+                {
+                    try
+                    {
+                        var financialYear = db.GtEcclco.Where(w =>
+                                                             w.BusinessKey == businessKey
+                                                        && System.DateTime.Now.Date >= w.FromDate.Date
+                                                        && System.DateTime.Now.Date <= w.TillDate.Date)
+                                            .First().FinancialYear;
+                        var ap_no = await db.GtEcdcbn
+                                        .Where(w => w.BusinessKey == businessKey
+                                            && w.FinancialYear == financialYear
+                                            && w.DocumentId == 101).FirstOrDefaultAsync();
+                        ap_no.CurrentDocNumber = ap_no.CurrentDocNumber + 1;
+
+                        await db.SaveChangesAsync();
+                        dbContext.Commit();
+                        return new DO_ReturnParameter() { Status = true, Message = ap_no.CurrentDocNumber.ToString() };
+                    }
+                    catch (DbUpdateException ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                    catch (Exception ex)
+                    {
+                        dbContext.Rollback();
+                        throw ex;
+                    }
+                }
+            }
+        }
+    }
+}

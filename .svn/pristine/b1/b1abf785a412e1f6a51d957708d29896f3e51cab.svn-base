@@ -1,0 +1,14 @@
+﻿using eSyaOutPatient.DO;
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace eSyaOutPatient.IF
+{
+    public interface IPatientRegistrationRepository
+    {
+        Task<List<DO_PatientAppointmentDetail>> GetAppointmentDetailByDate(int businessKey, DateTime startDate, DateTime endDate, string vType, string status);
+        Task<List<DO_PatientAppointmentDetail>> GetPatientByAppointmentKey(int businessKey, decimal appKey);
+    }
+}

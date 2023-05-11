@@ -1,0 +1,16 @@
+﻿using eSyaOutPatient.DO;
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace eSyaOutPatient.IF
+{
+    public interface IPatientRegistrationRepository
+    {
+        Task<List<DO_PatientAppointmentDetail>> GetAppointmentDetailByDate(int businessKey, DateTime startDate, DateTime endDate, string vType, string status);
+        Task<List<DO_PatientAppointmentDetail>> GetPatientByUHID(int businessKey, int uhid);
+        Task<List<DO_PatientAppointmentDetail>> GetAppointmentDetailByUHID(int businessKey, int uhid);
+        Task<DO_ReturnParameter> AddDummyVisit(int businessKey);
+    }
+}
